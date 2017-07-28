@@ -1,3 +1,7 @@
+# Outros
+*.cmake
+build/cmake
+
 # Prerequisites
 *.d
 

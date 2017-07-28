@@ -84,12 +84,6 @@ done
 #
 MODIS2SCIDB_3RDPARTY_PATH=$(realpath "./3rdparty-src")
 
-if [ ! -f ./scietl-3rdparty-linux-ubuntu-14.04.tar.gz ]; then
-  echo "Please, make sure to have scietl-3rdparty-linux-ubuntu-14.04.tar.gz in the current directory!"
-  echo ""
-  exit
-fi
-
 mkdir -p ${MODIS2SCIDB_3RDPARTY_PATH}
 cd ${MODIS2SCIDB_3RDPARTY_PATH}
 
@@ -454,7 +448,7 @@ fi
 #
 # GDAL
 #
-if [ ! -f "$MODIS2SCIDB_DEPENDENCIES_DIR/lib/libgdal.so" ]; then
+if [ -f "$MODIS2SCIDB_DEPENDENCIES_DIR/lib/libgdal.so" ]; then
   echo "installing GDAL/OGR..."
   echo ""
   sleep 1s
@@ -523,7 +517,7 @@ echo "export BOOST_INCLUDEDIR=${MODIS2SCIDB_DEPENDENCIES_DIR}/include" >> ../bui
 echo "export GDAL_DIR=${MODIS2SCIDB_DEPENDENCIES_DIR}" >> ../build/cmake/source.sh
 
 # Apagando arquivos temporarios
-rm -rf ${MODIS2SCIDB_3RDPARTY_PATH}
+sudo rm -rf ${MODIS2SCIDB_3RDPARTY_PATH}
 
 #
 # Finished!

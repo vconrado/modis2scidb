@@ -1,30 +1,32 @@
 /*
-  Copyright (C) 2014 National Institute For Space Research (INPE) - Brazil.
+   Copyright (C) 2014 National Institute For Space Research (INPE) - Brazil.
 
-  This file is part of SciETL - a free and open source tool to Extract, Transform and Load data to SciDB.
+   This file is part of SciETL - a free and open source tool to Extract,
+      Transform and Load data to SciDB.
 
-  SciETL is free software: you can
-  redistribute it and/or modify it under the terms of the
-  GNU Lesser General Public License as published by
-  the Free Software Foundation, either version 3 of the License,
-  or (at your option) any later version.
+   SciETL is free software: you can
+   redistribute it and/or modify it under the terms of the
+   GNU Lesser General Public License as published by
+   the Free Software Foundation, either version 3 of the License,
+   or (at your option) any later version.
 
-  SciETL is distributed in the hope that
-  it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-  GNU Lesser General Public License for more details.
+   SciETL is distributed in the hope that
+   it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+      warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Lesser General Public License for more details.
 
-  You should have received a copy of the GNU Lesser General Public License
-  along with SciETL. See LICENSE. If not, write to
-  e-sensing team at <esensing-team@dpi.inpe.br>.
+   You should have received a copy of the GNU Lesser General Public License
+   along with SciETL. See LICENSE. If not, write to
+   e-sensing team at <esensing-team@dpi.inpe.br>.
  */
 
 /*!
-  \file scietl/modis2scidb/utils.cpp
+   \file scietl/modis2scidb/utils.cpp
 
-  \brief Utility functions for dealing with MODIS data.
+   \brief Utility functions for dealing with MODIS data.
 
-  \author Gilberto Ribeiro de Queiroz
+   \author Gilberto Ribeiro de Queiroz
  */
 
 // Modis2SciDB
@@ -42,16 +44,14 @@
 #include <gdal_priv.h>
 
 std::vector<uint16_t>
-modis2scidb::parse_bands(const std::string& str)
-{
+modis2scidb::parse_bands(const std::string& str) {
   std::vector<uint16_t> result;
 
   std::vector<std::string> bands_str;
 
   boost::split(bands_str, str, boost::is_any_of(","));
 
-  for(std::size_t i = 0; i != bands_str.size(); ++i)
-  {
+  for (std::size_t i = 0; i != bands_str.size(); ++i) {
     result.push_back(boost::lexical_cast<uint16_t>(bands_str[i]));
   }
 
@@ -59,29 +59,26 @@ modis2scidb::parse_bands(const std::string& str)
 }
 
 std::pair<unsigned int, unsigned int>
-modis2scidb::parse_tile_dimension_range(const std::string& range)
-{
+modis2scidb::parse_tile_dimension_range(const std::string& range) {
   std::pair<unsigned int, unsigned int> tile_range;
   std::size_t pos = range.find("-");
 
-  if(pos != std::string::npos)
-  {
-    tile_range.first = boost::lexical_cast<unsigned int>(range.substr(0, pos));
+  if (pos != std::string::npos) {
+    tile_range.first  = boost::lexical_cast<unsigned int>(range.substr(0, pos));
     tile_range.second = boost::lexical_cast<unsigned int>(range.substr(pos + 1));
   }
-  else
-  {
-    tile_range.second = tile_range.first = boost::lexical_cast<unsigned int>(range);
+  else {
+    tile_range.second = tile_range.first = boost::lexical_cast<unsigned int>(
+                          range);
   }
 
   return tile_range;
 }
 
 modis2scidb::modis_file_descriptor
-modis2scidb::parse_modis_file_name(const std::string& file_name)
-{
-  if(file_name.empty())
-    throw parse_error() << error_description("can not parse and empty MODIS file name!");
+modis2scidb::parse_modis_file_name(const std::string& file_name) {
+  if (file_name.empty()) throw parse_error() << error_description(
+            "can not parse and empty MODIS file name!");
 
   boost::char_separator<char> sep(".");
 
@@ -89,8 +86,8 @@ modis2scidb::parse_modis_file_name(const std::string& file_name)
 
   boost::tokenizer<boost::char_separator<char> >::iterator itoken = tokens.begin();
 
-  if(itoken == tokens.end())
-    throw parse_error() << error_description("invalid MODIS file format!");
+  if (itoken == tokens.end()) throw parse_error() << error_description(
+            "invalid MODIS file format!");
 
   modis_file_descriptor mfile;
 
@@ -98,29 +95,36 @@ modis2scidb::parse_modis_file_name(const std::string& file_name)
 
   ++itoken;
 
-  if(itoken == tokens.end())
-    throw parse_error() << error_description("invalid MODIS file format: missing date of acquisition!");
+  if (itoken == tokens.end()) throw parse_error() << error_description(
+            "invalid MODIS file format: missing date of acquisition!");
 
   mfile.acquisition_date = *itoken;
+  mfile.year             = std::stoul(mfile.acquisition_date.substr(1,
+                                                                    4), nullptr,
+                                      10);
+  mfile.doy = std::stoul(mfile.acquisition_date.substr(6, 3), nullptr, 10);
 
   ++itoken;
 
-  if(itoken == tokens.end())
-    throw parse_error() << error_description("invalid MODIS file format: missing tile identifier!");
+  if (itoken == tokens.end()) throw parse_error() << error_description(
+            "invalid MODIS file format: missing tile identifier!");
 
   mfile.tile = *itoken;
 
+  mfile.tileH = std::stoul(mfile.tile.substr(1, 2), nullptr, 10);
+  mfile.tileV = std::stoul(mfile.tile.substr(4, 2), nullptr, 10);
+
   ++itoken;
 
-  if(itoken == tokens.end())
-    throw parse_error() << error_description("invalid MODIS file format: missing collection version!");
+  if (itoken == tokens.end()) throw parse_error() << error_description(
+            "invalid MODIS file format: missing collection version!");
 
   mfile.collection_version = *itoken;
 
   ++itoken;
 
-  if(itoken == tokens.end())
-    throw parse_error() << error_description("invalid MODIS file format: missing production date!");
+  if (itoken == tokens.end()) throw parse_error() << error_description(
+            "invalid MODIS file format: missing production date!");
 
   mfile.production_date = *itoken;
 
@@ -128,19 +132,19 @@ modis2scidb::parse_modis_file_name(const std::string& file_name)
 }
 
 boost::gregorian::date
-modis2scidb::parse_modis_acquisition_date(const std::string& adate)
-{
-  if(adate.length() < 8)
-    throw parse_error() << error_description("invalid acquisition date format!");
+modis2scidb::parse_modis_acquisition_date(const std::string& adate) {
+  if (adate.length() < 8) throw parse_error() << error_description(
+            "invalid acquisition date format!");
 
-  if(adate[0] != 'A')
-    throw parse_error() << error_description("invalid acquisition date format: not beginning with A!");
+  if (adate[0] != 'A') throw parse_error() << error_description(
+            "invalid acquisition date format: not beginning with A!");
 
   std::string sjyear = adate.substr(1, 4);
 
   std::string sjday = adate.substr(5, 3);
 
-  boost::gregorian::greg_year jyear(boost::lexical_cast<boost::gregorian::greg_year::value_type>(sjyear));
+  boost::gregorian::greg_year jyear(
+    boost::lexical_cast<boost::gregorian::greg_year::value_type>(sjyear));
 
   long ljday = boost::lexical_cast<long>(sjday);
 
@@ -152,30 +156,27 @@ modis2scidb::parse_modis_acquisition_date(const std::string& adate)
 }
 
 std::vector<std::string>
-modis2scidb::extract_subdatasets_pattern_names(const std::string& file_name)
-{
+modis2scidb::extract_subdatasets_pattern_names(const std::string& file_name) {
   std::vector<std::string> result_patterns;
 
   GDALDatasetH dataset = GDALOpen(file_name.c_str(), GA_ReadOnly);
 
-  if(dataset == 0)
-    throw gdal_error() << error_description("could not open hdf file!");
+  if (dataset == 0) throw gdal_error() << error_description(
+            "could not open hdf file!");
 
-  char** subdatasets = GDALGetMetadata(dataset, "SUBDATASETS");
+  char **subdatasets = GDALGetMetadata(dataset, "SUBDATASETS");
 
-  if(subdatasets != 0)
-  {
-    for(char** i = subdatasets; *i != 0; i += 2)
-    {
+  if (subdatasets != 0) {
+    for (char **i = subdatasets; *i != 0; i += 2) {
       std::string name = *i;
 
       std::size_t pos = name.find("=");
 
-      if(pos == std::string::npos)
-      {
+      if (pos == std::string::npos) {
         GDALClose(dataset);
 
-        throw gdal_error() << error_description("could not find subdataset name metadata in the hdf file!");
+        throw gdal_error() << error_description(
+                "could not find subdataset name metadata in the hdf file!");
       }
 
       name = name.substr(pos + 1);
@@ -186,19 +187,18 @@ modis2scidb::extract_subdatasets_pattern_names(const std::string& file_name)
     }
   }
 
-  GDALClose(dataset);
+        GDALClose(dataset);
 
   return result_patterns;
 }
 
 std::string
 modis2scidb::make_subdataset_pattern(const std::string& file_name,
-                                     const std::string& subdataset_name)
-{
+                                     const std::string& subdataset_name) {
   std::size_t pos = subdataset_name.find(file_name);
 
-  if(pos == std::string::npos)
-    throw gdal_error() << error_description("could not determine a prefix pattern for a subdataset name to be used in GDAL!");
+  if (pos == std::string::npos) throw gdal_error() << error_description(
+            "could not determine a prefix pattern for a subdataset name to be used in GDAL!");
 
   std::string prefix = subdataset_name.substr(0, pos);
 
@@ -210,34 +210,32 @@ modis2scidb::make_subdataset_pattern(const std::string& file_name,
 }
 
 std::size_t
-modis2scidb::num_bytes(GDALDataType dt)
-{
-  switch(dt)
+modis2scidb::num_bytes(GDALDataType dt) {
+  switch (dt)
   {
-    case GDT_Byte:
-      return sizeof(char);
-      
-    case GDT_UInt16:
-      return sizeof(uint16_t);
-      
-    case GDT_Int16:
-      return sizeof(int16_t);
-      
-    case GDT_UInt32:
-      return sizeof(uint32_t);
-      
-    case GDT_Int32:
-      return sizeof(int32_t);
-      
-    case GDT_Float32:
-      return sizeof(float);
-      
-    case GDT_Float64:
-      return sizeof(double);
-      
-    default:
-      throw conversion_error() << error_description("can not convert this GDAL type to MODIS datatype range!");
+  case GDT_Byte:
+    return sizeof(char);
+
+  case GDT_UInt16:
+    return sizeof(uint16_t);
+
+  case GDT_Int16:
+    return sizeof(int16_t);
+
+  case GDT_UInt32:
+    return sizeof(uint32_t);
+
+  case GDT_Int32:
+    return sizeof(int32_t);
+
+  case GDT_Float32:
+    return sizeof(float);
+
+  case GDT_Float64:
+    return sizeof(double);
+
+  default:
+    throw conversion_error() << error_description(
+            "can not convert this GDAL type to MODIS datatype range!");
   }
 }
-
-

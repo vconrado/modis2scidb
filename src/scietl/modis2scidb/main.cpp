@@ -11,9 +11,12 @@
 // Boost
 
 
+// Function prototypes
 void convert(modis2scidb::input_arguments& args);
 
-int  main(int argc, char **argv) {
+
+// Main
+int main(int argc, char **argv) {
   modis2scidb::input_arguments parsed_args;
 
   try {
@@ -27,13 +30,13 @@ int  main(int argc, char **argv) {
 
     convert(parsed_args);
   } catch (const modis2scidb::exception& e) {
-    std::cerr << "\n\nmodis2scidb finished with errors!\n";
+    std::cerr << std::endl << argv[0] << " finished with errors!" << std::endl;
 
     if (e.what() != 0) {
       const std::string *d = boost::get_error_info<modis2scidb::error_description>(
         e);
-      std::cerr << "An unexpected error has occurried: " << "(" << *d << ")" <<
-      std::endl;
+      std::cerr << "An unexpected error has occurried: " << "" << *d << "" <<
+      std::endl << std::endl;
     }
     return EXIT_FAILURE;
   }
@@ -41,5 +44,15 @@ int  main(int argc, char **argv) {
 }
 
 void convert(modis2scidb::input_arguments& args) {
-  modis2scidb::MODISSet modisSet(args.source_folder_name);
+  boost::filesystem::path folderPath(args.source_folder_name);
+  modis2scidb::MODISSet   modisSet(folderPath);
+
+  if (!modisSet.validateSet()) {
+    throw modis2scidb::invalid_dataset_error() << modis2scidb::error_description(
+            "Invalid dataset!");
+  }
+
+  if (args.verbose) {
+    modisSet.print();
+  }
 }
