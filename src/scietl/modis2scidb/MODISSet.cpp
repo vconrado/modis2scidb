@@ -1,7 +1,7 @@
 #include "MODISSet.hpp"
 
-
-modis2scidb::MODISSet::MODISSet(boost::filesystem::path& folderPath) {
+modis2scidb::MODISSet::MODISSet(boost::filesystem::path& folderPath) :
+  minV(MODIS_GRID_ROWS), maxV(0), minH(MODIS_GRID_COLS), maxH(0) {
   addFiles(folderPath);
 }
 
@@ -42,9 +42,45 @@ modis2scidb::MODISSet::~MODISSet() {
   // TODO delete grid and MODISFiles
 }
 
-// creating grid
+std::vector<std::vector<std::vector<modis2scidb::MODISFile *> > >modis2scidb::
+MODISSet::getCube() {
+  size_t nDoys;
+  size_t vSize = maxV - minV + 1;
+  size_t hSize = maxH - minH + 1;
 
-void modis2scidb::MODISSet::add(MODISFile *modisFile) {
+  nDoys = grid.size();
+
+
+  std::vector<std::vector<std::vector<modis2scidb::MODISFile *> > > cube(
+    vSize, std::vector<std::vector<modis2scidb::MODISFile *> >(
+      hSize, std::vector<modis2scidb::MODISFile *>(nDoys)));
+
+  if (nDoys == 0) {
+    return cube;
+  }
+
+  // std::cout << "VSize: " << cube.size() << std::endl;
+  // std::cout << "HSize: " << cube[0].size() << std::endl;
+  // std::cout << "DoySize: " << cube[0][0].size() << std::endl;
+  size_t t = 0;
+
+  for (const auto& matrix_pair : grid) {
+    std::vector<std::vector<modis2scidb::MODISFile *> > matrix =
+      matrix_pair.second;
+
+    for (size_t v = minV; v <= maxV; ++v) {
+      for (size_t h = minH; h <= maxH; ++h) {
+        cube[v - minV][h - minH][t] = matrix[v][h];
+      }
+    }
+    ++t;
+  }
+
+  return cube;
+}
+
+void modis2scidb::
+MODISSet::add(MODISFile *modisFile) {
   std::map<uint32_t,
            std::vector<std::vector<modis2scidb::MODISFile *> > >::iterator it;
 
@@ -67,6 +103,23 @@ void modis2scidb::MODISSet::add(MODISFile *modisFile) {
     matrix[tileV][tileH] = modisFile;
     grid[doy]            =  matrix;
   }
+
+  // updating min{V|H}
+  if (tileV > maxV) {
+    maxV = tileV;
+  }
+
+  if (tileV < minV) {
+    minV = tileV;
+  }
+
+  if (tileH > maxH) {
+    maxH = tileH;
+  }
+
+  if (tileH < minH) {
+    minH = tileH;
+  }
 }
 
 bool modis2scidb::MODISSet::validateSet() {
@@ -76,6 +129,13 @@ bool modis2scidb::MODISSet::validateSet() {
 }
 
 void modis2scidb::MODISSet::print() const {
+  std::cout << "MODISSet:" << std::endl;
+  std::cout << "Bouding Box: (V0,H0,Vf,Hf) = ("
+            << minV << ", "
+            << minH << ", "
+            << maxV << ", "
+            << maxH << ")" << std::endl;
+
   for (const auto& matrix_pair : grid) {
     std::cout << "DOY: " << matrix_pair.first << std::endl;
 

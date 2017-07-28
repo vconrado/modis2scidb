@@ -52,6 +52,9 @@ void convert(modis2scidb::input_arguments& args) {
             "Invalid dataset!");
   }
 
+  std::vector<std::vector<std::vector<modis2scidb::MODISFile *> > > cube =
+    modisSet.getCube();
+
   if (args.verbose) {
     modisSet.print();
   }

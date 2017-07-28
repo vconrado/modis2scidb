@@ -22,15 +22,18 @@ public:
 
   MODISSet(boost::filesystem::path& folderPath);
   ~MODISSet();
-  void add(
+  void                                                             add(
     MODISFile *modisFile);
-  void print() const;
-  bool validateSet();
+  void                                                             print() const;
+  bool                                                             validateSet();
+  std::vector<std::vector<std::vector<modis2scidb::MODISFile *> > >getCube();
 
 private:
 
   void addFiles(boost::filesystem::path& folderPath);
   std::map<uint32_t, std::vector<std::vector<modis2scidb::MODISFile *> > > grid;
+  size_t minV, maxV;
+  size_t minH, maxH;
 };
 } // end namespace modis2scidb
 
