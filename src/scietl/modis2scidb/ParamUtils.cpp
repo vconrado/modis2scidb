@@ -26,11 +26,11 @@ void modis2scidb::handle_input_arguments(
     boost::program_options::value<std::string>(&parsed_args->target_file_name),
     "The target file to store the SciDB data file.\n")
     (",x", boost::program_options::value<uint32_t>(&parsed_args->x_chunk_size),
-    "The chunk size int the first dimension.\n")
+    "The chunk size in horizontal dimension.\n")
     (",y", boost::program_options::value<uint32_t>(&parsed_args->y_chunk_size),
-    "The chunk size int the second dimension.\n")
-    (",z", boost::program_options::value<uint32_t>(&parsed_args->z_chunk_size),
-    "The chunk size int the third dimension.\n")
+    "The chunk size in vertical dimension.\n")
+    (",t", boost::program_options::value<uint32_t>(&parsed_args->z_chunk_size),
+    "The chunk size in time dimension.\n")
     ("bands,b", boost::program_options::value<std::string>(&bands_str),
     "A list of comma separated spectral bands to extract data, starting from 0: \"3,4\".\n");
   boost::program_options::variables_map options;

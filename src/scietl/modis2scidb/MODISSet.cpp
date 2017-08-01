@@ -21,18 +21,18 @@ void modis2scidb::MODISSet::addFiles(boost::filesystem::path& folderPath,
     boost::filesystem::path cp = (*it);
 
     if (boost::filesystem::is_regular_file(cp)) {
-      // if is a symbolic link, get canonical  path
-      if (boost::filesystem::is_symlink(cp)) {
-        cp = boost::filesystem::canonical(cp);
-      }
-
       // check file extension
       if (std::string(".hdf").compare(cp.extension().string()) == 0) {
+        // if is a symbolic link, get canonical  path
+        if (boost::filesystem::is_symlink(cp)) {
+          cp = boost::filesystem::canonical(cp);
+        }
+
         // create Modisfile
         MODISFile *modisFile = new MODISFile(cp);
 
         // save first file as referenceFile
-        if (grid.empty()) {
+        if (cube.empty()) {
           referenceFile = modisFile;
           bandNames     = referenceFile->getBands(bands_nums);
         }
@@ -57,16 +57,18 @@ void modis2scidb::MODISSet::addFiles(boost::filesystem::path& folderPath,
 }
 
 modis2scidb::MODISSet::~MODISSet() {
-  for (const auto& matrix_pair : grid) {
+  size_t t_size = cube.size();
+
+  for (size_t t = 0; t < t_size; ++t) {
     for (size_t row = 0; row < MODIS_GRID_ROWS; ++row) {
       for (size_t col = 0; col < MODIS_GRID_COLS; ++col) {
-        if (matrix_pair.second[row][col] != NULL) {
-          delete matrix_pair.second[row][col];
+        if (cube[t][row][col] != NULL) {
+          delete cube[t][row][col];
         }
       }
     }
   }
-  grid.clear();
+  cube.clear();
 }
 
 std::vector<std::vector<std::vector<modis2scidb::MODISFile *> > >modis2scidb::
@@ -75,59 +77,97 @@ MODISSet::getCube() {
   size_t vSize = maxV - minV + 1;
   size_t hSize = maxH - minH + 1;
 
-  nDoys = grid.size();
+  nDoys = cube.size();
+
 
   std::vector<std::vector<std::vector<modis2scidb::MODISFile *> > > cube(
     vSize, std::vector<std::vector<modis2scidb::MODISFile *> >(
       hSize, std::vector<modis2scidb::MODISFile *>(nDoys)));
 
-  if (nDoys == 0) {
-    return cube;
-  }
+  /*
+           if (nDoys == 0) {
+            return cube;
+           }
 
-  // std::cout << "VSize: " << cube.size() << std::endl;
-  // std::cout << "HSize: " << cube[0].size() << std::endl;
-  // std::cout << "DoySize: " << cube[0][0].size() << std::endl;
-  size_t t = 0;
+           // std::cout << "VSize: " << cube.size() << std::endl;
+           // std::cout << "HSize: " << cube[0].size() << std::endl;
+           // std::cout << "DoySize: " << cube[0][0].size() << std::endl;
+           size_t t = 0;
 
-  for (const auto& matrix_pair : grid) {
-    std::vector<std::vector<modis2scidb::MODISFile *> > matrix =
-      matrix_pair.second;
+           for (const auto& matrix_pair : grid) {
+            std::vector<std::vector<modis2scidb::MODISFile *> > matrix =
+              matrix_pair.second;
 
-    for (size_t v = minV; v <= maxV; ++v) {
-      for (size_t h = minH; h <= maxH; ++h) {
-        cube[v - minV][h - minH][t] = matrix[v][h];
-      }
-    }
-    ++t;
-  }
+            for (size_t v = minV; v <= maxV; ++v) {
+              for (size_t h = minH; h <= maxH; ++h) {
+                cube[v - minV][h - minH][t] = matrix[v][h];
+              }
+            }
+   ++t;
+           }
+   */
 
   return cube;
 }
 
+modis2scidb::MODISFile * modis2scidb::MODISSet::getMODISFile(
+  size_t x,
+  size_t y,
+  size_t t) {
+  modis2scidb::MODISFile *mFile = NULL;
+
+  if (t >= timeOrder.size()) {
+    std::cout << "Invalid time index." << std::endl;
+    return NULL;
+  }
+  size_t tidx   = timeOrder[t];
+  size_t colidx = x / MODIS_NCOLS;
+  size_t rowidx = y / MODIS_NROWS;
+
+  if ((colidx < minH) || (colidx >= maxH) || (rowidx < minV) ||
+      (rowidx >= maxV)) {
+    std::cout << "Invalid x or y index." << std::endl;
+    return NULL;
+  }
+  size_t coloffset = x % MODIS_NCOLS;
+  size_t rowoffset = y % MODIS_NROWS;
+
+  std::cout << "(" << x << "," << y << "," << t << ") = (" << colidx << ", " <<
+    rowidx << ", " << tidx <<
+    ") + (" << coloffset << ", " << rowoffset << ", 0) " << std::endl;
+
+  return cube[tidx][rowidx][colidx];
+
+  return mFile;
+}
+
 void modis2scidb::
 MODISSet::add(MODISFile *modisFile) {
-  std::map<uint32_t,
-           std::vector<std::vector<modis2scidb::MODISFile *> > >::iterator it;
+  std::map<size_t, size_t>::iterator it;
 
   size_t doy   = modisFile->getDoy();
   size_t tileV = modisFile->getTileV();
   size_t tileH = modisFile->getTileH();
-  it = grid.find(doy);
+  it = doyMap.find(doy);
 
-  if (it == grid.end()) {
+  if (it == doyMap.end()) {
     std::vector<std::vector<modis2scidb::MODISFile *> >
     matrix(MODIS_GRID_ROWS, std::vector<modis2scidb::MODISFile *>(MODIS_GRID_COLS,
                                                                   NULL));
 
-    // TODO remover codigo duplicado
+    doyMap[doy]          = cube.size();
     matrix[tileV][tileH] = modisFile;
-    grid[doy]            =  matrix;
+    cube.push_back(matrix);
+
+    // update timeOrder
+    timeOrder.clear();
+
+    for (const auto& doy_pair : doyMap) {
+      timeOrder.push_back(doy_pair.second);
+    }
   }
   else {
-    std::vector<std::vector<modis2scidb::MODISFile *> > matrix = it->second;
-    matrix[tileV][tileH] = modisFile;
-    grid[doy]            =  matrix;
+    cube[it->second][tileV][tileH] = modisFile;
   }
 
 
@@ -164,12 +204,22 @@ void modis2scidb::MODISSet::print() const {
   std::cout << "Pixel Size: " << referenceFile->getPixelSize(bandNames) <<
     std::endl;
 
-  for (const auto& matrix_pair : grid) {
-    std::cout << "DOY: " << matrix_pair.first << std::endl;
+  for (const auto& doy_pair : doyMap) {
+    size_t t = doy_pair.second;
+    std::cout << "DOY: " << doy_pair.first << " (" << timeOrder[t] << "/" <<
+      t << ")"
+              <<
+      std::endl;
+
+    // size_t t_size = timeOrder.size();
+    //
+    // for (size_t tidx = 0; tidx < t_size; ++tidx) {
+    //   std::cout << "TIDX " << tidx << " " << timeOrder[tidx] << std::endl;
+    //   size_t t = timeOrder[tidx];
 
     for (size_t row = 0; row < MODIS_GRID_ROWS; ++row) {
       for (size_t col = 0; col < MODIS_GRID_COLS; ++col) {
-        if (matrix_pair.second[row][col] == NULL) {
+        if (cube[t][row][col] == NULL) {
           std::cout << "* ";
         }
         else {

@@ -46,6 +46,10 @@
 #define MODIS_GRID_COLS 36
 #define MODIS_GRID_ROWS 18
 
+// TODO pegar do arquivo
+#define MODIS_NCOLS 4800
+#define MODIS_NROWS 4800
+
 namespace modis2scidb {
 // ! A class for keeping a decomposed MODIS file name
 

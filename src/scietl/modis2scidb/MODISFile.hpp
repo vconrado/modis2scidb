@@ -28,6 +28,7 @@ public:
   ~MODISFile();
 
   void                    print() const;
+  std::string             getFileName() const;
   std::string             getDataType() const;
   size_t                  getDoy() const;
   size_t                  getTileV() const;
@@ -46,6 +47,8 @@ private:
 
   boost::filesystem::path path;
   modis2scidb::modis_file_descriptor fileDescriptor;
+  size_t nCols;
+  size_t nRows;
 };
 } // end namespace modis2scidb
 

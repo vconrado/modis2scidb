@@ -65,4 +65,35 @@ void convert(modis2scidb::input_arguments& args) {
   if (args.verbose) {
     modisSet.print();
   }
+
+
+  std::cout <<
+    modisSet.getMODISFile(48000, 38400,
+                          0)->getFileName() << std::endl;
+  std::cout <<
+    modisSet.getMODISFile(48000, 38400,
+                          1)->getFileName() << std::endl;
+  std::cout <<
+    modisSet.getMODISFile(48000, 38400,
+                          2)->getFileName() << std::endl;
+
+  std::cout <<
+    modisSet.getMODISFile(48000, 38400 + 1,
+                          0)->getFileName() << std::endl;
+  std::cout <<
+    modisSet.getMODISFile(48000, 38400 + 10,
+                          1)->getFileName() << std::endl;
+  std::cout <<
+    modisSet.getMODISFile(48000, 38400 + 2000,
+                          2)->getFileName() << std::endl;
+
+  std::cout <<
+    modisSet.getMODISFile(48000, 38400 + 4800,
+                          0)->getFileName() << std::endl;
+  std::cout <<
+    modisSet.getMODISFile(48000, 38400 + 4800 + 1,
+                          1)->getFileName() << std::endl;
+  std::cout <<
+    modisSet.getMODISFile(48000, 38400 + 4800 + 4800 - 1,
+                          2)->getFileName() << std::endl;
 }

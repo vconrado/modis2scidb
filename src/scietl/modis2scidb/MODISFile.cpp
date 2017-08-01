@@ -8,6 +8,10 @@ modis2scidb::MODISFile::MODISFile(boost::filesystem::path& path) :
 
 modis2scidb::MODISFile::~MODISFile() {}
 
+std::string modis2scidb::MODISFile::getFileName() const {
+  return path.filename().string();
+}
+
 std::string modis2scidb::MODISFile::getDataType() const {
   return fileDescriptor.data_type_name;
 }
