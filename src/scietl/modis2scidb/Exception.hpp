@@ -70,6 +70,9 @@ typedef boost::error_info<struct tag_error_description,
 
 // ! An exception indicating an invalid dataset
 struct invalid_dataset_error : virtual exception {};
+
+// ! An exception indicating an invalid data type
+struct invalid_data_type_error : virtual exception {};
 }
 
 #endif // __SCIETL_MODIS2SCIDB_EXCEPTION_HPP__

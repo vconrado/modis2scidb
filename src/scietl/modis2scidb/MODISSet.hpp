@@ -20,7 +20,8 @@ namespace modis2scidb {
 class MODISSet {
 public:
 
-  MODISSet(boost::filesystem::path& folderPath);
+  MODISSet(boost::filesystem::path& folderPath,
+           std::vector<uint16_t>  & num_bands);
   ~MODISSet();
   void                                                             add(
     MODISFile *modisFile);
@@ -30,10 +31,16 @@ public:
 
 private:
 
-  void addFiles(boost::filesystem::path& folderPath);
-  std::map<uint32_t, std::vector<std::vector<modis2scidb::MODISFile *> > > grid;
+  void addFiles(boost::filesystem::path& folderPath,
+                std::vector<uint16_t>  & num_bands);
+  void extractDefaultInformationFromFile(boost::filesystem::path& file,
+                                         std::vector<uint16_t>  & bands_nums);
+  std::map<uint32_t, std::vector<std::vector<modis2scidb::MODISFile *> > >grid;
+  std::vector<std::string>band_names;
   size_t minV, maxV;
   size_t minH, maxH;
+  std::string defaultReferenceDataType;
+  size_t defaultPixelSize;
 };
 } // end namespace modis2scidb
 

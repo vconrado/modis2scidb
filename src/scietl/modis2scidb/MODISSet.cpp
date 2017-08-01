@@ -1,11 +1,14 @@
 #include "MODISSet.hpp"
 
-modis2scidb::MODISSet::MODISSet(boost::filesystem::path& folderPath) :
-  minV(MODIS_GRID_ROWS), maxV(0), minH(MODIS_GRID_COLS), maxH(0) {
-  addFiles(folderPath);
+modis2scidb::MODISSet::MODISSet(boost::filesystem::path& folderPath,
+                                std::vector<uint16_t>  & bands_nums) :
+  minV(MODIS_GRID_ROWS), maxV(0), minH(MODIS_GRID_COLS), maxH(0),
+  defaultReferenceDataType("") {
+  addFiles(folderPath, bands_nums);
 }
 
-void modis2scidb::MODISSet::addFiles(boost::filesystem::path& folderPath) {
+void modis2scidb::MODISSet::addFiles(boost::filesystem::path& folderPath,
+                                     std::vector<uint16_t>  & bands_nums) {
   if (!boost::filesystem::is_directory(folderPath)) {
     throw modis2scidb::invalid_dir_error() << modis2scidb::error_description(
             "invalid dir path!");
@@ -13,33 +16,119 @@ void modis2scidb::MODISSet::addFiles(boost::filesystem::path& folderPath) {
 
   boost::filesystem::recursive_directory_iterator end;
 
-  for (boost::filesystem::recursive_directory_iterator i(folderPath); i != end;
-       ++i) {
-    boost::filesystem::path cp = (*i);
+  for (boost::filesystem::recursive_directory_iterator it(folderPath); it != end;
+       ++it) {
+    boost::filesystem::path cp = (*it);
 
     if (boost::filesystem::is_regular_file(cp)) {
-      try {
-        if (std::string(".hdf").compare(cp.extension().string()) == 0) {
-          MODISFile *modisFile = new MODISFile(cp);
-          add(modisFile);
+      // if is a symbolic link, get canonical  path
+      if (boost::filesystem::is_symlink(cp)) {
+        cp = boost::filesystem::canonical(cp);
+      }
+
+      // check file extension
+      if (std::string(".hdf").compare(cp.extension().string()) == 0) {
+        // get informations from the first file
+        if (grid.empty()) {
+          extractDefaultInformationFromFile(cp, bands_nums);
         }
-      } catch (const modis2scidb::exception& e) {
-        if (e.what() != 0) {
-          const std::string *d =
-            boost::get_error_info<modis2scidb::error_description>(
-              e);
-          std::cerr <<
-          "An error has occurried while parsing modis file name: " <<
-          "" << *d << "" <<
-          std::endl << std::endl;
+
+        // create Modisfile
+        MODISFile *modisFile = new MODISFile(cp, band_names);
+
+        // check if the current file has the same data type as the first one
+        if (defaultReferenceDataType.compare(modisFile->getFileDescriptor().
+                                             data_type_name) != 0) {
+          delete modisFile;
+          throw modis2scidb::invalid_data_type_error() <<
+                modis2scidb::error_description(
+                  "invalid data type. Expecting " + defaultReferenceDataType +
+                  " !");
         }
+
+        // add file to the dataset
+        add(modisFile);
       }
     }
   }
 }
 
+void modis2scidb::MODISSet::extractDefaultInformationFromFile(
+  boost::filesystem::path& file, std::vector<uint16_t>& bands_nums) {
+  band_names.clear();
+
+  // 1. Getting the names of selected bands
+  // 1.1 Getting bands names by bands numbers
+  std::vector<std::string> all_band_names =
+    modis2scidb::extract_subdatasets_pattern_names(file.string());
+  std::size_t num_bands = bands_nums.size();
+
+  // 1.2 Getting bands names and calculating pixel size from
+  // selected bands
+  for (std::size_t i = 0; i != num_bands; ++i) {
+    if (bands_nums[i] >= all_band_names.size()) {
+      throw modis2scidb::invalid_arg_value() <<
+            modis2scidb::error_description("band number is invalid!");
+    }
+    else {
+      band_names.push_back(all_band_names[bands_nums[i]]);
+      std::cout << "Band: " << all_band_names[bands_nums[i]] << std::endl;
+    }
+  }
+
+  // 2. Getting DataTypeName from fileName
+  modis2scidb::modis_file_descriptor mfd = modis2scidb::parse_modis_file_name(
+    file.filename().string());
+  defaultReferenceDataType = mfd.data_type_name;
+
+  // 3. Getting pixelSize
+
+  boost::format subdataset(band_name);
+
+  subdataset.bind_arg(1, path.string());
+
+  std::cout << std::endl << "#### Band Path: " << subdataset.str() << std::endl;
+  GDALDatasetH dataset = GDALOpen(subdataset.str().c_str(), GA_ReadOnly);
+
+  if (dataset == 0) {
+    boost::format err_msg(
+      "could not open subdataset: '%1%', for input hdf file: '%2%'!");
+    throw modis2scidb::gdal_error() <<
+          modis2scidb::error_description((err_msg % subdataset.str() %
+                                          path.string()).str());
+  }
+  else {
+    std::cout << "Opened dataset " << std::endl;
+  }
+
+  GDALRasterBandH band = GDALGetRasterBand(dataset, 1);
+
+  if (band == 0) {
+    GDALClose(dataset);
+    boost::format err_msg("could not access band: %1%!");
+    throw modis2scidb::gdal_error() <<
+          modis2scidb::error_description((err_msg % band_name).str());
+  }
+  else {
+    std::cout << "Opened band " << GDALGetRasterBandXSize(band) << " " <<
+      GDALGetRasterBandYSize(band) << std::endl;
+  }
+  GDALClose(dataset);
+  }
+
+}
+
 modis2scidb::MODISSet::~MODISSet() {
-  // TODO delete grid and MODISFiles
+  for (const auto& matrix_pair : grid) {
+    for (size_t row = 0; row < MODIS_GRID_ROWS; ++row) {
+      for (size_t col = 0; col < MODIS_GRID_COLS; ++col) {
+        if (matrix_pair.second[row][col] != NULL) {
+          delete matrix_pair.second[row][col];
+        }
+      }
+    }
+  }
+  grid.clear();
 }
 
 std::vector<std::vector<std::vector<modis2scidb::MODISFile *> > >modis2scidb::
@@ -104,22 +193,14 @@ MODISSet::add(MODISFile *modisFile) {
     grid[doy]            =  matrix;
   }
 
+
+  // modisFile->print();
+
   // updating min{V|H}
-  if (tileV > maxV) {
-    maxV = tileV;
-  }
-
-  if (tileV < minV) {
-    minV = tileV;
-  }
-
-  if (tileH > maxH) {
-    maxH = tileH;
-  }
-
-  if (tileH < minH) {
-    minH = tileH;
-  }
+  maxV = (tileV > maxV) ? tileV : maxV;
+  minV = (tileV < minV) ? tileV : minV;
+  maxH = (tileH > maxH) ? tileH : maxH;
+  minH = (tileH < minH) ? tileH : minH;
 }
 
 bool modis2scidb::MODISSet::validateSet() {
