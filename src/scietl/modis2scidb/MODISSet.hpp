@@ -33,14 +33,14 @@ private:
 
   void addFiles(boost::filesystem::path& folderPath,
                 std::vector<uint16_t>  & num_bands);
-  void extractDefaultInformationFromFile(boost::filesystem::path& file,
-                                         std::vector<uint16_t>  & bands_nums);
   std::map<uint32_t, std::vector<std::vector<modis2scidb::MODISFile *> > >grid;
-  std::vector<std::string>band_names;
+  std::vector<std::string>bandNames;
+  size_t read(size_t l,
+              size_t c,
+              char  *out);
   size_t minV, maxV;
   size_t minH, maxH;
-  std::string defaultReferenceDataType;
-  size_t defaultPixelSize;
+  modis2scidb::MODISFile *referenceFile;
 };
 } // end namespace modis2scidb
 

@@ -3,7 +3,7 @@
 modis2scidb::MODISSet::MODISSet(boost::filesystem::path& folderPath,
                                 std::vector<uint16_t>  & bands_nums) :
   minV(MODIS_GRID_ROWS), maxV(0), minH(MODIS_GRID_COLS), maxH(0),
-  defaultReferenceDataType("") {
+  referenceFile(NULL) {
   addFiles(folderPath, bands_nums);
 }
 
@@ -28,22 +28,25 @@ void modis2scidb::MODISSet::addFiles(boost::filesystem::path& folderPath,
 
       // check file extension
       if (std::string(".hdf").compare(cp.extension().string()) == 0) {
-        // get informations from the first file
-        if (grid.empty()) {
-          extractDefaultInformationFromFile(cp, bands_nums);
-        }
-
         // create Modisfile
-        MODISFile *modisFile = new MODISFile(cp, band_names);
+        MODISFile *modisFile = new MODISFile(cp);
 
-        // check if the current file has the same data type as the first one
-        if (defaultReferenceDataType.compare(modisFile->getFileDescriptor().
-                                             data_type_name) != 0) {
-          delete modisFile;
-          throw modis2scidb::invalid_data_type_error() <<
-                modis2scidb::error_description(
-                  "invalid data type. Expecting " + defaultReferenceDataType +
-                  " !");
+        // save first file as referenceFile
+        if (grid.empty()) {
+          referenceFile = modisFile;
+          bandNames     = referenceFile->getBands(bands_nums);
+        }
+        else {
+          // check if the current file has the same data type as the
+          // referenceFile
+          if (referenceFile->getDataType().compare(
+                modisFile->getDataType()) != 0) {
+            delete modisFile;
+            throw modis2scidb::invalid_data_type_error() <<
+                  modis2scidb::error_description(
+                    "invalid data type. Expecting " + referenceFile->getDataType() +
+                    " !");
+          }
         }
 
         // add file to the dataset
@@ -51,71 +54,6 @@ void modis2scidb::MODISSet::addFiles(boost::filesystem::path& folderPath,
       }
     }
   }
-}
-
-void modis2scidb::MODISSet::extractDefaultInformationFromFile(
-  boost::filesystem::path& file, std::vector<uint16_t>& bands_nums) {
-  band_names.clear();
-
-  // 1. Getting the names of selected bands
-  // 1.1 Getting bands names by bands numbers
-  std::vector<std::string> all_band_names =
-    modis2scidb::extract_subdatasets_pattern_names(file.string());
-  std::size_t num_bands = bands_nums.size();
-
-  // 1.2 Getting bands names and calculating pixel size from
-  // selected bands
-  for (std::size_t i = 0; i != num_bands; ++i) {
-    if (bands_nums[i] >= all_band_names.size()) {
-      throw modis2scidb::invalid_arg_value() <<
-            modis2scidb::error_description("band number is invalid!");
-    }
-    else {
-      band_names.push_back(all_band_names[bands_nums[i]]);
-      std::cout << "Band: " << all_band_names[bands_nums[i]] << std::endl;
-    }
-  }
-
-  // 2. Getting DataTypeName from fileName
-  modis2scidb::modis_file_descriptor mfd = modis2scidb::parse_modis_file_name(
-    file.filename().string());
-  defaultReferenceDataType = mfd.data_type_name;
-
-  // 3. Getting pixelSize
-
-  boost::format subdataset(band_name);
-
-  subdataset.bind_arg(1, path.string());
-
-  std::cout << std::endl << "#### Band Path: " << subdataset.str() << std::endl;
-  GDALDatasetH dataset = GDALOpen(subdataset.str().c_str(), GA_ReadOnly);
-
-  if (dataset == 0) {
-    boost::format err_msg(
-      "could not open subdataset: '%1%', for input hdf file: '%2%'!");
-    throw modis2scidb::gdal_error() <<
-          modis2scidb::error_description((err_msg % subdataset.str() %
-                                          path.string()).str());
-  }
-  else {
-    std::cout << "Opened dataset " << std::endl;
-  }
-
-  GDALRasterBandH band = GDALGetRasterBand(dataset, 1);
-
-  if (band == 0) {
-    GDALClose(dataset);
-    boost::format err_msg("could not access band: %1%!");
-    throw modis2scidb::gdal_error() <<
-          modis2scidb::error_description((err_msg % band_name).str());
-  }
-  else {
-    std::cout << "Opened band " << GDALGetRasterBandXSize(band) << " " <<
-      GDALGetRasterBandYSize(band) << std::endl;
-  }
-  GDALClose(dataset);
-  }
-
 }
 
 modis2scidb::MODISSet::~MODISSet() {
@@ -138,7 +76,6 @@ MODISSet::getCube() {
   size_t hSize = maxH - minH + 1;
 
   nDoys = grid.size();
-
 
   std::vector<std::vector<std::vector<modis2scidb::MODISFile *> > > cube(
     vSize, std::vector<std::vector<modis2scidb::MODISFile *> >(
@@ -173,10 +110,10 @@ MODISSet::add(MODISFile *modisFile) {
   std::map<uint32_t,
            std::vector<std::vector<modis2scidb::MODISFile *> > >::iterator it;
 
-  it = grid.find(modisFile->getFileDescriptor().doy);
-  size_t tileV = modisFile->getFileDescriptor().tileV;
-  size_t tileH = modisFile->getFileDescriptor().tileH;
-  size_t doy   = modisFile->getFileDescriptor().doy;
+  size_t doy   = modisFile->getDoy();
+  size_t tileV = modisFile->getTileV();
+  size_t tileH = modisFile->getTileH();
+  it = grid.find(doy);
 
   if (it == grid.end()) {
     std::vector<std::vector<modis2scidb::MODISFile *> >
@@ -206,6 +143,7 @@ MODISSet::add(MODISFile *modisFile) {
 bool modis2scidb::MODISSet::validateSet() {
   // TODO Implementar
   // Verificar se é um cubo de dados sem falhas
+  // comprar MODISFiles (tamanho, bandas, etc)
   return true;
 }
 
@@ -216,6 +154,15 @@ void modis2scidb::MODISSet::print() const {
             << minH << ", "
             << maxV << ", "
             << maxH << ")" << std::endl;
+
+
+  std::cout << "Bands: " << std::endl;
+
+  for (size_t i = 0; i < bandNames.size(); ++i) {
+    std::cout << "\t#" << i << ": " << bandNames[i] << std::endl;
+  }
+  std::cout << "Pixel Size: " << referenceFile->getPixelSize(bandNames) <<
+    std::endl;
 
   for (const auto& matrix_pair : grid) {
     std::cout << "DOY: " << matrix_pair.first << std::endl;
